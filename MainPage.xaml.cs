@@ -229,29 +229,39 @@
             _mode = mode;
         }
 
-        private float CalculateAmplitude(float x, float y)
+        private float CalculateAmplitude(float x, float y, float time)
         {
+            float spatialPart;
             switch (_mode)
             {
                 case 0: // Standard
-                    return (float)(Math.Sin(_freqX * Math.PI * x) * Math.Sin(_freqY * Math.PI * y));
+                    spatialPart = (float)(Math.Sin(_freqX * Math.PI * x) * Math.Sin(_freqY * Math.PI * y));
+                    break;
 
                 case 1: // Circular
                     float r = (float)Math.Sqrt((x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5)) * 2;
                     float theta = (float)Math.Atan2(y - 0.5, x - 0.5);
-                    return (float)(Math.Sin(_freqX * Math.PI * r) * Math.Cos(_freqY * theta));
+                    spatialPart = (float)(Math.Sin(_freqX * Math.PI * r) * Math.Cos(_freqY * theta));
+                    break;
 
                 case 2: // Radial
                     float radius = (float)Math.Sqrt((x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5)) * 2;
-                    return (float)Math.Sin(_freqX * Math.PI * radius) * (float)Math.Sin(_freqY * Math.PI * radius);
+                    spatialPart = (float)Math.Sin(_freqX * Math.PI * radius) * (float)Math.Sin(_freqY * Math.PI * radius);
+                    break;
 
                 case 3: // Complex
-                    return (float)(Math.Sin(_freqX * Math.PI * x) * Math.Sin(_freqY * Math.PI * y) +
+                    spatialPart = (float)(Math.Sin(_freqX * Math.PI * x) * Math.Sin(_freqY * Math.PI * y) +
                                    0.5 * Math.Sin((_freqX + 1) * Math.PI * x) * Math.Sin((_freqY - 1) * Math.PI * y));
+                    break;
 
                 default:
-                    return 0;
-            }
+                    spatialPart = 0;
+                    break;
+            }  
+            
+            // Zeitabhängige Schwingung - die Membran oszilliert kontinuierlich
+            return spatialPart * (float)Math.Cos(time * 2);
+
         }
 
         public void Update()
@@ -259,22 +269,33 @@
             _time += 0.05f;
             float damping = 0.95f;
             float forceScale = 0.002f;
+            float vibrationNoise = 0.0005f; // Konstantes "Rütteln" durch die Vibration
 
             foreach (var particle in _particles)
             {
                 // Berechne die Amplitude an der aktuellen Position
-                float amplitude = CalculateAmplitude(particle.X, particle.Y);
+                float amplitude = CalculateAmplitude(particle.X, particle.Y, _time);
 
                 // Berechne den Gradienten (Kraft) durch numerische Differentiation
                 float dx = 0.01f;
                 float dy = 0.01f;
-                float ampXPlus = CalculateAmplitude(particle.X + dx, particle.Y);
-                float ampXMinus = CalculateAmplitude(particle.X - dx, particle.Y);
-                float ampYPlus = CalculateAmplitude(particle.X, particle.Y + dy);
-                float ampYMinus = CalculateAmplitude(particle.X, particle.Y - dy);
+                float ampXPlus = CalculateAmplitude(particle.X + dx, particle.Y, _time);
+                float ampXMinus = CalculateAmplitude(particle.X - dx, particle.Y, _time);
+                float ampYPlus = CalculateAmplitude(particle.X, particle.Y + dy, _time);
+                float ampYMinus = CalculateAmplitude(particle.X, particle.Y - dy, _time);
 
                 float forceX = -(ampXPlus - ampXMinus) / (2 * dx);
                 float forceY = -(ampYPlus - ampYMinus) / (2 * dy);
+
+                // Füge zufällige Vibration hinzu (simuliert die ständige Bewegung der Membran)
+                float randomX = ((float)_random.NextDouble() - 0.5f) * vibrationNoise;
+                float randomY = ((float)_random.NextDouble() - 0.5f) * vibrationNoise;
+
+                // Füge zusätzliche Kraft basierend auf der Amplitude hinzu
+                // (Bereiche mit hoher Amplitude "schütteln" stärker)
+                float vibrationForce = Math.Abs(amplitude) * 0.001f;
+                randomX += ((float)_random.NextDouble() - 0.5f) * vibrationForce;
+                randomY += ((float)_random.NextDouble() - 0.5f) * vibrationForce;
 
                 // Aktualisiere Geschwindigkeit
                 particle.VelocityX += forceX * forceScale;
